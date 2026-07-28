@@ -1,0 +1,17 @@
+# Firebase App Hosting configuration for the Natsastore editor web app.
+# Deploy from the web/ directory: `firebase apphosting:backends:create` then
+# connect this repo, or use `firebase deploy` once a backend is linked.
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  # URL of the `editorApi` Cloud Function (functions/src/index.ts), printed
+  # after `firebase deploy --only functions`. Not a secret.
+  - variable: NEXT_PUBLIC_EDITOR_API_URL
+    value: "https://europe-west1-natsatopics.cloudfunctions.net/editorApi"
+    availability:
+      - BUILD
+      - RUNTIME

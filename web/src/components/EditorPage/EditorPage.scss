@@ -1,0 +1,137 @@
+.editor-page {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+
+  &--loading,
+  &--error {
+    padding: 4rem 1.5rem;
+    text-align: center;
+    color: var(--color-text-muted);
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  &__pillar {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    background: var(--color-surface-raised);
+    color: var(--color-accent);
+  }
+
+  &__source {
+    color: var(--color-text-muted);
+    margin-bottom: 2rem;
+  }
+
+  &__banner {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+    color: var(--color-text-muted);
+  }
+
+  &__option-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    margin-bottom: 2rem;
+  }
+
+  &__option {
+    text-align: left;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    cursor: pointer;
+    color: var(--color-text);
+
+    &--active {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 1px var(--color-accent);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
+
+  &__option-template {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+  }
+
+  &__tiptap {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    min-height: 120px;
+
+    .ProseMirror {
+      outline: none;
+    }
+  }
+
+  &__counters {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.75rem;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 2rem;
+
+    button {
+      background: var(--color-surface-raised);
+      border: 1px solid var(--color-border);
+      color: var(--color-text);
+      border-radius: var(--radius);
+      padding: 0.6rem 1.2rem;
+      cursor: pointer;
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+    }
+  }
+
+  &__publish {
+    background: var(--color-accent) !important;
+    color: #1a1a1a !important;
+    border-color: var(--color-accent) !important;
+  }
+
+  &__error {
+    color: var(--color-danger);
+    margin-top: 0.75rem;
+  }
+
+  &__results ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  &__result--posted {
+    color: var(--color-success);
+  }
+
+  &__result--failed {
+    color: var(--color-danger);
+  }
+}

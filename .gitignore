@@ -1,0 +1,26 @@
+node_modules/
+.DS_Store
+*.log
+npm-debug.log*
+
+# Build outputs
+functions/lib/
+web/.next/
+packages/*/lib/
+packages/*/dist/
+
+# Env / secrets (never commit real values)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Editor
+.vscode/
+.idea/

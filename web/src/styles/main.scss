@@ -1,0 +1,39 @@
+// Shared styles for the Natsastore editor web app. Component-specific SCSS
+// files live next to their component (see src/components/*), following the
+// project's co-location convention; this file holds only cross-cutting
+// tokens and resets.
+
+:root {
+  --color-bg: #14181c;
+  --color-surface: #1f242a;
+  --color-surface-raised: #262c33;
+  --color-border: #343b43;
+  --color-text: #e7e9ea;
+  --color-text-muted: #9aa3ab;
+  --color-accent: #b5895a;
+  --color-danger: #d1584a;
+  --color-success: #4caf7d;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+a {
+  color: var(--color-accent);
+}
+
+button {
+  font-family: inherit;
+}
