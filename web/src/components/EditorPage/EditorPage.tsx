@@ -17,6 +17,10 @@ const PLATFORMS: SocialPlatform[] = ['facebook', 'threads', 'bluesky'];
 interface EditorPageProps {
   draftId: string;
   token: string;
+  /** Pre-selects a specific draft option, e.g. when arriving via that
+   * option's own magic link in the daily email rather than the generic
+   * "open editor" link. */
+  initialOptionId?: string;
 }
 
 /**
@@ -25,7 +29,7 @@ interface EditorPageProps {
  * finalises the single cross-platform message with Tiptap, saves it, and
  * publishes it — which forks it to Facebook/Threads/Bluesky server-side.
  */
-export function EditorPage({ draftId, token }: EditorPageProps) {
+export function EditorPage({ draftId, token, initialOptionId }: EditorPageProps) {
   const [draft, setDraft] = useState<SafeDraft | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
@@ -43,7 +47,8 @@ export function EditorPage({ draftId, token }: EditorPageProps) {
     getDraft(draftId, token)
       .then(({ draft }) => {
         setDraft(draft);
-        const defaultOption = draft.options[0];
+        const matchedOption = initialOptionId ? draft.options.find((o) => o.id === initialOptionId) : undefined;
+        const defaultOption = matchedOption ?? draft.options[0];
         setSelectedOptionId(defaultOption?.id ?? null);
         editor?.commands.setContent(draft.finalText ?? defaultOption?.text ?? '');
       })

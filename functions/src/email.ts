@@ -46,11 +46,29 @@ export async function sendMagicLinkEmail(draft: DraftDocument): Promise<void> {
     getSecret(SECRET_NAMES.WEB_APP_BASE_URL),
   ]);
 
-  const link = `${baseUrl.replace(/\/$/, '')}/editor/${draft.id}?token=${draft.magicToken}`;
+  const baseLink = `${baseUrl.replace(/\/$/, '')}/editor/${draft.id}?token=${draft.magicToken}`;
 
+  // Each draft option is itself a magic link straight into the editor with
+  // that option pre-selected, so the editor can go from "which of these do
+  // I like" to "editing it" in one click, instead of always landing on the
+  // first option via a single generic link.
   const optionsPreview = draft.options
-    .map((o, i) => `<p><strong>Vaihtoehto ${i + 1} (${o.template}):</strong><br>${escapeHtml(o.text)}</p>`)
+    .map(
+      (o, i) => `
+      <p>
+        <strong>Vaihtoehto ${i + 1} (${o.template}):</strong><br>
+        <a href="${baseLink}&optionId=${encodeURIComponent(o.id)}">${escapeHtml(o.text)}</a>
+      </p>`
+    )
     .join('\n');
+
+  const sourceNewsHtml = draft.sourceNews
+    ? `
+      <p>
+        <a href="${draft.sourceNews.url}"><strong>${escapeHtml(draft.sourceNews.title)}</strong></a><br>
+        ${escapeHtml(draft.sourceNews.summary)}
+      </p>`
+    : '';
 
   await sendViaSendGrid({
     to: editorEmail,
@@ -59,9 +77,9 @@ export async function sendMagicLinkEmail(draft: DraftDocument): Promise<void> {
     subject: `Natsastore: ${draft.date} päivän postausluonnokset odottavat tarkistusta`,
     html: `
       <p>Päivän uutispohjainen aihe (pilari: ${draft.pillar}):</p>
-      ${draft.sourceNews ? `<p><a href="${draft.sourceNews.url}">${escapeHtml(draft.sourceNews.title)}</a></p>` : ''}
+      ${sourceNewsHtml}
       ${optionsPreview}
-      <p><a href="${link}">Avaa muokkaustyökalu ja julkaise →</a></p>
+      <p><a href="${baseLink}">Avaa muokkaustyökalu ja julkaise →</a></p>
       <p>Linkki vanhenee 48 tunnin kuluttua.</p>
     `,
   });

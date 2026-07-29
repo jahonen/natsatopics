@@ -2,7 +2,7 @@ import { EditorPage } from '@/components/EditorPage/EditorPage';
 
 interface PageProps {
   params: { draftId: string };
-  searchParams: { token?: string };
+  searchParams: { token?: string; optionId?: string };
 }
 
 export default function DraftEditorRoute({ params, searchParams }: PageProps) {
@@ -16,5 +16,5 @@ export default function DraftEditorRoute({ params, searchParams }: PageProps) {
     );
   }
 
-  return <EditorPage draftId={params.draftId} token={token} />;
+  return <EditorPage draftId={params.draftId} token={token} initialOptionId={searchParams.optionId} />;
 }
