@@ -10,7 +10,7 @@
     "lint": "tsc -p . --noEmit"
   },
   "dependencies": {
-    "@google-cloud/vertexai": "^1.9.2",
+    "google-auth-library": "^9.14.1",
     "firebase-admin": "^12.6.0"
   },
   "devDependencies": {

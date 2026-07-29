@@ -30,7 +30,7 @@ assets/             natsastore-sisaltoopas.md — canonical content guide.
    ```
 
 2. **Create secrets in Google Secret Manager** (project `natsatopics`):
-   `EDITOR_EMAIL`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`,
+   `SENDGRID_API_KEY`,
    `WEB_APP_BASE_URL`, `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_ACCESS_TOKEN`,
    `THREADS_USER_ID`, `THREADS_ACCESS_TOKEN`, `BLUESKY_IDENTIFIER`,
    `BLUESKY_APP_PASSWORD`. Full list/purpose in `docs/services.md`.
@@ -44,11 +44,31 @@ assets/             natsastore-sisaltoopas.md — canonical content guide.
      --role="roles/secretmanager.secretAccessor"
    ```
 
+   **Create `EDITOR_EMAIL` and `SENDGRID_FROM_EMAIL` in Google Cloud
+   Parameter Manager** instead — they're plain configuration, not
+   credentials:
+   ```
+   gcloud parametermanager parameters create EDITOR_EMAIL \
+     --project=natsatopics --location=global --parameter-format=UNFORMATTED
+   printf '%s' "<editor email>" | gcloud parametermanager parameters versions create v1 \
+     --parameter=EDITOR_EMAIL --project=natsatopics --location=global --payload-data-from-file=-
+
+   gcloud parametermanager parameters create SENDGRID_FROM_EMAIL \
+     --project=natsatopics --location=global --parameter-format=UNFORMATTED
+   printf '%s' "<verified sender email>" | gcloud parametermanager parameters versions create v1 \
+     --parameter=SENDGRID_FROM_EMAIL --project=natsatopics --location=global --payload-data-from-file=-
+
+   gcloud projects add-iam-policy-binding natsatopics \
+     --member="serviceAccount:<PROJECT_NUMBER>-compute@developer.gserviceaccount.com" \
+     --role="roles/parametermanager.parameterAccessor"
+   ```
+
 3. **Enable required APIs** (if not already):
    ```
    gcloud services enable aiplatform.googleapis.com secretmanager.googleapis.com \
-     cloudfunctions.googleapis.com cloudscheduler.googleapis.com \
-     firestore.googleapis.com run.googleapis.com --project=natsatopics
+     parametermanager.googleapis.com cloudfunctions.googleapis.com \
+     cloudscheduler.googleapis.com firestore.googleapis.com \
+     run.googleapis.com --project=natsatopics
    ```
 
 4. **Create the Firestore database** (Native mode) in the Firebase console
@@ -67,6 +87,13 @@ assets/             natsastore-sisaltoopas.md — canonical content guide.
 ```
 firebase deploy --only functions,firestore
 ```
+
+`firebase.json`'s `predeploy` hook runs `scripts/vendor-shared.sh`, which
+builds `packages/shared` and packs it into
+`functions/vendor/natsatopics-shared.tgz` (gitignored, regenerated on every
+deploy). This is required because Cloud Build only uploads `functions/` in
+isolation and can't resolve the `packages/shared` npm workspace otherwise;
+`functions/package.json` depends on that tarball via a `file:` reference.
 
 Note the printed `editorApi` URL, then set it as
 `NEXT_PUBLIC_EDITOR_API_URL` in `web/apphosting.yaml` (already pre-filled

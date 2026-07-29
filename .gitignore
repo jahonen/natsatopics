@@ -9,6 +9,18 @@ web/.next/
 packages/*/lib/
 packages/*/dist/
 
+# functions/vendor/ and functions/package-lock.json are regenerated locally
+# by scripts/vendor-shared.sh on every `firebase deploy` (predeploy hook),
+# which uploads local files directly — no git involved, so nothing to
+# commit here.
+functions/vendor/
+functions/package-lock.json
+
+# web/vendor/ is NOT gitignored: Firebase App Hosting builds straight from
+# the connected GitHub repo (no local predeploy hook), so the vendored
+# @natsatopics/shared tarball and web/package-lock.json must be committed
+# for the isolated (rootDir: web) cloud build to resolve the dependency.
+
 # Env / secrets (never commit real values)
 .env
 .env.local

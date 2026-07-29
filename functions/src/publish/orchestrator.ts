@@ -3,18 +3,19 @@ import { publishToFacebook } from './facebook';
 import { publishToThreads } from './threads';
 import { publishToBluesky } from './bluesky';
 import { PlatformPostResult } from '@natsatopics/shared';
+import { getAiModelConfig } from '../params';
 
-const PUBLISHERS: Record<SocialPlatform, (text: string) => Promise<PlatformPostResult>> = {
-  facebook: publishToFacebook,
-  threads: publishToThreads,
-  bluesky: publishToBluesky,
+const PUBLISHERS: Record<SocialPlatform, (text: string, draft: DraftDocument) => Promise<PlatformPostResult>> = {
+  facebook: (text) => publishToFacebook(text),
+  threads: (text, draft) => publishToThreads(text, draft.pillar),
+  bluesky: (text) => publishToBluesky(text),
 };
 
 /**
  * Vaihe 6 & 7: takes the editor-approved final message and forks it to each
  * platform's pipeline. Each pipeline first checks the platform's character
  * limit (packages/shared/social/formatters); if the message doesn't fit, an
- * AI rewrite (Gemini) shortens it before publishing.
+ * AI rewrite shortens it before publishing.
  */
 export async function forkAndPublish(
   projectId: string,
@@ -25,13 +26,14 @@ export async function forkAndPublish(
 
   const platforms: SocialPlatform[] = ['facebook', 'threads', 'bluesky'];
   const results: Partial<Record<SocialPlatform, PlatformPostResult>> = {};
+  const aiModelConfig = await getAiModelConfig();
 
   for (const platform of platforms) {
     let text = finalText;
     const check = checkPlatformLength(platform, text);
     if (!check.withinLimit) {
       try {
-        text = await adaptForPlatform(projectId, finalText, platform);
+        text = await adaptForPlatform(projectId, finalText, platform, aiModelConfig);
       } catch (err: any) {
         results[platform] = { status: 'failed', text: finalText, error: `AI-muokkaus epäonnistui: ${err?.message ?? err}` };
         continue;
@@ -39,7 +41,7 @@ export async function forkAndPublish(
     }
 
     try {
-      results[platform] = await PUBLISHERS[platform](text);
+      results[platform] = await PUBLISHERS[platform](text, draft);
     } catch (err: any) {
       results[platform] = { status: 'failed', text, error: err?.message ?? String(err) };
     }

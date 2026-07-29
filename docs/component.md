@@ -64,6 +64,19 @@ Every modular unit of functionality in this project, per project convention.
 - **Lifecycle tag:** alpha
 - Scheduled trigger (06:00 Europe/Helsinki daily). Calls `runDailyPipeline`.
 
+### `fetchYleNews` — `functions/src/yleScraper.ts`
+- **Lifecycle tag:** alpha
+- **Inputs:** `maxAgeHours` (default 30).
+- **Outputs:** deduplicated `NewsItem[]` (by article URL) from Yle's public
+  RSS feeds, used by `dailyJob.ts` (Vaihe 1).
+- **Side effects:** fetches 3 feeds from `feeds.yle.fi`: two topic-filtered
+  via `/uutiset/v1/recent.rss?publisherIds=YLE_UUTISET&concepts=<id>`
+  (`18-34953` = Ulkomaat, `18-164292` = Ulko- ja turvallisuuspolitiikka —
+  Yle's `majorHeadlines` endpoint has no dedicated foreign-news publisher,
+  only `YLE_UUTISET`/`YLE_URHEILU`), plus the general
+  `/uutiset/v1/majorHeadlines/YLE_UUTISET.rss` headlines feed to also catch
+  domestic reservi/maanpuolustus stories that the topic feeds miss.
+
 ### `editorApi` — `functions/src/index.ts`
 - **Lifecycle tag:** alpha
 - HTTPS function exposing `get-draft`, `save-draft`, `publish` routes to
@@ -73,3 +86,29 @@ Every modular unit of functionality in this project, per project convention.
 - **Lifecycle tag:** alpha
 - One module per platform, each reading its own credentials from Secret
   Manager and posting via that platform's HTTP API.
+
+### `refreshThreadsToken` — `functions/src/index.ts`
+- **Lifecycle tag:** alpha
+- Scheduled trigger (weekly, Monday 03:00 Europe/Helsinki). Calls
+  `refreshThreadsAccessToken` (`functions/src/publish/threadsTokenRefresh.ts`)
+  to rotate the 60-day Threads long-lived user token before it expires.
+
+### `testBlueskyHello` — `functions/src/index.ts`
+- **Lifecycle tag:** alpha
+- Manual HTTPS smoke test that posts "Hello World" via
+  `publish/bluesky.ts` to confirm the `BLUESKY_IDENTIFIER` /
+  `BLUESKY_APP_PASSWORD` secrets and AT Protocol call path work. Not part
+  of the daily pipeline.
+
+### `testFacebookHello` — `functions/src/index.ts`
+- **Lifecycle tag:** alpha
+- Manual HTTPS smoke test that posts "Hello World" via
+  `publish/facebook.ts` to confirm the `FACEBOOK_PAGE_ID` /
+  `FACEBOOK_PAGE_ACCESS_TOKEN` secrets and Graph API call path work. Not
+  part of the daily pipeline.
+
+### `testThreadsHello` — `functions/src/index.ts`
+- **Lifecycle tag:** alpha
+- Manual HTTPS smoke test that posts "Hello World" via `publish/threads.ts`
+  to confirm the `THREADS_USER_ID` / `THREADS_ACCESS_TOKEN` secrets and
+  Graph API call path work. Not part of the daily pipeline.

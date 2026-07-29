@@ -14,8 +14,9 @@
     "seed": "npm run build && node lib/scripts/seedContentBank.js"
   },
   "dependencies": {
+    "@google-cloud/parametermanager": "^0.5.2",
     "@google-cloud/secret-manager": "^5.6.0",
-    "@natsatopics/shared": "*",
+    "@natsatopics/shared": "file:./vendor/natsatopics-shared.tgz",
     "firebase-admin": "^12.6.0",
     "firebase-functions": "^5.1.1",
     "node-fetch": "^2.7.0",

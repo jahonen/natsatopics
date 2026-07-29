@@ -10,6 +10,8 @@
         "*.log"
       ],
       "predeploy": [
+        "bash scripts/vendor-shared.sh",
+        "npm --prefix \"$RESOURCE_DIR\" install",
         "npm --prefix \"$RESOURCE_DIR\" run build"
       ]
     }

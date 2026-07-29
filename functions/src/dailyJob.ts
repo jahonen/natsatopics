@@ -17,6 +17,7 @@ import {
 } from '@natsatopics/shared';
 import { fetchYleNews } from './yleScraper';
 import { sendMagicLinkEmail } from './email';
+import { getAiModelConfig } from './params';
 
 const TOKEN_TTL_HOURS = 48;
 
@@ -50,6 +51,7 @@ export async function runDailyPipeline(projectId: string): Promise<{ draftId: st
   // väärään pilariin.
   const weekly = await getWeeklyCounts(db, isoWeek);
   const targetPillar = pickUnderrepresentedPillar(weekly.counts);
+  const aiModelConfig = await getAiModelConfig();
 
   let chosenNews: NewsItem | undefined;
   let finalPillar: Pillar;
@@ -63,7 +65,7 @@ export async function runDailyPipeline(projectId: string): Promise<{ draftId: st
     }
     finalPillar = targetPillar;
     bankItemId = bankItem.id;
-    const generated = await generateBankDrafts(projectId, bankItem.prompt, finalPillar);
+    const generated = await generateBankDrafts(projectId, bankItem.prompt, finalPillar, aiModelConfig);
     options = generated.options;
   } else {
     // Vaihe 1 — Syötteen rajaus
@@ -78,11 +80,11 @@ export async function runDailyPipeline(projectId: string): Promise<{ draftId: st
       return { draftId: null, reason: 'Kaikki uutiset suodattuivat pois punaisten lippujen esitarkistuksessa' };
     }
 
-    // Käydään ehdokkaita läpi, kunnes Gemini hyväksyy yhden relevanttina ja
+    // Käydään ehdokkaita läpi, kunnes tekoäly hyväksyy yhden relevanttina ja
     // ei-punalipullisena, ja antaa sille uutisvetoisen pilarin.
     let chosenPillar: Pillar | null = null;
     for (const item of candidates) {
-      const classification = await classifyNewsItem(projectId, item);
+      const classification = await classifyNewsItem(projectId, item, aiModelConfig);
       if (classification.redFlagged || !classification.relevant || !classification.pillar) continue;
       chosenNews = item;
       chosenPillar = classification.pillar;
@@ -96,7 +98,7 @@ export async function runDailyPipeline(projectId: string): Promise<{ draftId: st
     finalPillar = chosenPillar;
 
     // Vaihe 4 — Luonnostelu
-    const generated = await generateDrafts(projectId, chosenNews, finalPillar);
+    const generated = await generateDrafts(projectId, chosenNews, finalPillar, aiModelConfig);
     options = generated.options;
   }
 

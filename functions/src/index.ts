@@ -4,6 +4,11 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onRequest } from 'firebase-functions/v2/https';
 import { runDailyPipeline } from './dailyJob';
 import { forkAndPublish } from './publish/orchestrator';
+import { publishToBluesky } from './publish/bluesky';
+import { publishToFacebook } from './publish/facebook';
+import { publishToThreads } from './publish/threads';
+import { refreshThreadsAccessToken } from './publish/threadsTokenRefresh';
+import { sendThreadsRefreshNotification } from './email';
 import { DraftDocument } from '@natsatopics/shared';
 
 initializeApp();
@@ -149,6 +154,99 @@ export const editorApi = onRequest({ region: REGION, cors: true }, async (req, r
     res.status(404).json({ error: 'Unknown route' });
   } catch (err: any) {
     console.error('editorApi error', err);
+    res.status(500).json({ error: err?.message ?? 'Internal error' });
+  }
+});
+
+/**
+ * Threads' long-lived user token lasts 60 days and must be refreshed
+ * before then. Weekly cron gives a wide safety margin against missed runs.
+ */
+export const refreshThreadsToken = onSchedule(
+  { schedule: '0 3 * * 1', timeZone: 'Europe/Helsinki', region: REGION, timeoutSeconds: 60 },
+  async () => {
+    try {
+      const result = await refreshThreadsAccessToken();
+      const details = `New Threads access token stored; expires in ~${result.expiresInDays} days.`;
+      console.log(details);
+      await sendThreadsRefreshNotification('SUCCESS', details);
+    } catch (err: any) {
+      const details = `Threads token refresh failed: ${err?.message ?? String(err)}`;
+      console.error(details);
+      await sendThreadsRefreshNotification('FAIL', details);
+      throw err;
+    }
+  }
+);
+
+/**
+ * Manual smoke test for the Bluesky publishing pipeline: posts a fixed
+ * "Hello World" message so the BLUESKY_IDENTIFIER / BLUESKY_APP_PASSWORD
+ * secrets and the AT Protocol call path can be verified end-to-end without
+ * running the full daily pipeline. Not part of the production flow —
+ * safe to delete once Bluesky publishing has been confirmed working.
+ */
+export const testBlueskyHello = onRequest({ region: REGION, cors: true, invoker: 'public' }, async (req, res) => {
+  console.log('testBlueskyHello: start');
+  try {
+    const result = await publishToBluesky(`Hello World from Natsastore 👋 (${new Date().toISOString()})`);
+    if (result.status !== 'posted') {
+      console.error('testBlueskyHello: failed', result.error);
+      res.status(502).json(result);
+      return;
+    }
+    console.log(`testBlueskyHello: posted ${result.postId}`);
+    res.json(result);
+  } catch (err: any) {
+    console.error('testBlueskyHello error', err);
+    res.status(500).json({ error: err?.message ?? 'Internal error' });
+  }
+});
+
+/**
+ * Manual smoke test for the Facebook publishing pipeline: posts a fixed
+ * "Hello World" message so the FACEBOOK_PAGE_ID / FACEBOOK_PAGE_ACCESS_TOKEN
+ * secrets and the Graph API call path can be verified end-to-end without
+ * running the full daily pipeline. Not part of the production flow —
+ * safe to delete once Facebook publishing has been confirmed working.
+ */
+export const testFacebookHello = onRequest({ region: REGION, cors: true, invoker: 'public' }, async (req, res) => {
+  console.log('testFacebookHello: start');
+  try {
+    const result = await publishToFacebook(`Hello World from Natsastore 👋 (${new Date().toISOString()})`);
+    if (result.status !== 'posted') {
+      console.error('testFacebookHello: failed', result.error);
+      res.status(502).json(result);
+      return;
+    }
+    console.log(`testFacebookHello: posted ${result.postId}`);
+    res.json(result);
+  } catch (err: any) {
+    console.error('testFacebookHello error', err);
+    res.status(500).json({ error: err?.message ?? 'Internal error' });
+  }
+});
+
+/**
+ * Manual smoke test for the Threads publishing pipeline: posts a fixed
+ * "Hello World" message so the THREADS_USER_ID / THREADS_ACCESS_TOKEN
+ * secrets and the Graph API call path can be verified end-to-end without
+ * running the full daily pipeline. Not part of the production flow —
+ * safe to delete once Threads publishing has been confirmed working.
+ */
+export const testThreadsHello = onRequest({ region: REGION, cors: true, invoker: 'public' }, async (req, res) => {
+  console.log('testThreadsHello: start');
+  try {
+    const result = await publishToThreads(`Hello World from Natsastore 👋 (${new Date().toISOString()})`);
+    if (result.status !== 'posted') {
+      console.error('testThreadsHello: failed', result.error);
+      res.status(502).json(result);
+      return;
+    }
+    console.log(`testThreadsHello: posted ${result.postId}`);
+    res.json(result);
+  } catch (err: any) {
+    console.error('testThreadsHello error', err);
     res.status(500).json({ error: err?.message ?? 'Internal error' });
   }
 });
