@@ -5,16 +5,15 @@
   "description": "Natsastore daily social media content pipeline: YLE scraping, AI drafting, editor review via magic link, multi-platform publishing.",
   "workspaces": [
     "packages/shared",
-    "functions",
-    "web"
+    "functions"
   ],
   "scripts": {
     "build:shared": "npm run build -w packages/shared",
     "build:functions": "npm run build -w functions",
-    "build:web": "npm run build -w web",
+    "build:web": "npm --prefix web run build",
     "build": "npm run build:shared && npm run build:functions && npm run build:web",
-    "lint": "npm run lint -w packages/shared && npm run lint -w functions && npm run lint -w web",
-    "dev:web": "npm run dev -w web",
+    "lint": "npm run lint -w packages/shared && npm run lint -w functions && npm --prefix web run lint",
+    "dev:web": "npm --prefix web run dev",
     "functions:shell": "npm run shell -w functions",
     "emulators": "firebase emulators:start --only functions,firestore,hosting"
   },
