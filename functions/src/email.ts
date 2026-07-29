@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 import { getSecret, SECRET_NAMES } from './secrets';
 import { getParameter, PARAMETER_NAMES } from './params';
-import { DraftDocument } from '@natsatopics/shared';
+import { DraftDocument, Pillar, PILLAR_TARGET_SHARE, SocialPlatform, WeeklyAnalyticsStats } from '@natsatopics/shared';
 
 /** Shared low-level SendGrid HTTP API sender used by every email in this project. */
 async function sendViaSendGrid(params: {
@@ -133,6 +133,95 @@ export async function sendThreadsRefreshNotification(
     fromName: 'Natsastore sisältöpipeline',
     subject: `Natsastore Threads token refresh [${status}]`,
     html: wrapEmailHtml(baseUrl, `<p>${escapeHtml(details)}</p>`),
+  });
+}
+
+const PILLAR_LABELS: Record<Pillar, string> = {
+  nostalgia: 'Nostalgia',
+  geopolitics: 'Geopolitiikka',
+  reserve: 'Reservi',
+  history: 'Historia',
+};
+
+const PLATFORM_LABELS: Record<SocialPlatform, string> = {
+  facebook: 'Facebook',
+  threads: 'Threads',
+  bluesky: 'Bluesky',
+};
+
+function pct(n: number): string {
+  return `${Math.round(n * 100)}%`;
+}
+
+/**
+ * Sends the weekly analytics summary (previous ISO week, Monday-Sunday
+ * Europe/Helsinki) to the editor: pillar mix vs. the guide's target
+ * shares, per-platform publish success/failure, template usage, content
+ * bank health, and a Finnish-language recommendations list. See
+ * `functions/src/weeklyAnalyticsJob.ts` for how `stats` is computed.
+ */
+export async function sendWeeklyAnalyticsEmail(stats: WeeklyAnalyticsStats): Promise<void> {
+  const [fromEmail, editorEmail, baseUrl] = await Promise.all([
+    getParameter(PARAMETER_NAMES.SENDGRID_FROM_EMAIL),
+    getParameter(PARAMETER_NAMES.EDITOR_EMAIL),
+    getSecret(SECRET_NAMES.WEB_APP_BASE_URL),
+  ]);
+
+  const pillarRowsHtml = (Object.keys(PILLAR_TARGET_SHARE) as Pillar[])
+    .map((pillar) => {
+      const actual = stats.pillarShares[pillar];
+      const target = PILLAR_TARGET_SHARE[pillar];
+      const overUnder = stats.pillarDeltas[pillar] < 0 ? 'alle tavoitteen' : 'yli/tasan tavoitteen';
+      return `
+      <tr>
+        <td style="padding: 4px 12px 4px 0;">${PILLAR_LABELS[pillar]}</td>
+        <td style="padding: 4px 12px 4px 0;">${stats.pillarCounts[pillar]} kpl</td>
+        <td style="padding: 4px 12px 4px 0;">${pct(actual)} (tavoite ${pct(target)}, ${overUnder})</td>
+      </tr>`;
+    })
+    .join('\n');
+
+  const platformRowsHtml = (Object.keys(PLATFORM_LABELS) as SocialPlatform[])
+    .map((platform) => {
+      const s = stats.platformStats[platform];
+      return `
+      <tr>
+        <td style="padding: 4px 12px 4px 0;">${PLATFORM_LABELS[platform]}</td>
+        <td style="padding: 4px 12px 4px 0;">${s.posted} julkaistu</td>
+        <td style="padding: 4px 12px 4px 0;">${s.failed} epäonnistui</td>
+        <td style="padding: 4px 12px 4px 0;">${s.adapted} AI-lyhennettyä</td>
+      </tr>`;
+    })
+    .join('\n');
+
+  const templateRowsHtml = Object.entries(stats.templateCounts)
+    .map(([template, count]) => `<li>Malli ${template}: ${count} kpl</li>`)
+    .join('\n');
+
+  const recommendationsHtml = stats.recommendations.map((r) => `<li>${escapeHtml(r)}</li>`).join('\n');
+
+  await sendViaSendGrid({
+    to: editorEmail,
+    from: fromEmail,
+    fromName: 'Natsastore sisältöpipeline',
+    subject: `Natsastore: viikon ${stats.isoWeek} analytiikka (${stats.rangeStart}–${stats.rangeEnd})`,
+    html: wrapEmailHtml(
+      baseUrl,
+      `
+      <p>Viikko ${stats.isoWeek} (${stats.rangeStart}–${stats.rangeEnd}): ${stats.publishedCount} julkaistu, ${stats.rejectedCount} hylätty, ${stats.pendingCount} yhä käsittelemättä.</p>
+
+      <h3 style="margin-bottom: 4px;">Pilarijakauma vs. tavoite</h3>
+      <table>${pillarRowsHtml}</table>
+
+      <h3 style="margin-bottom: 4px;">Alustat</h3>
+      <table>${platformRowsHtml}</table>
+
+      ${templateRowsHtml ? `<h3 style="margin-bottom: 4px;">Käytetyt mallipohjat</h3><ul>${templateRowsHtml}</ul>` : ''}
+
+      <h3 style="margin-bottom: 4px;">Suositukset</h3>
+      <ul>${recommendationsHtml}</ul>
+    `
+    ),
   });
 }
 

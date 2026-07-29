@@ -171,3 +171,7 @@ npm run dev:web           # Next.js dev server against the emulator
 5. `editorApi`'s `publish` route forks the final text to Facebook, Threads
    and Bluesky, using Mistral to shorten text that exceeds a platform's
    character limit first.
+6. `weeklyAnalyticsEmail` (Monday 07:00 Europe/Helsinki) analyses the ISO
+   week that just ended — pillar mix vs. target shares, per-platform
+   success/failure, content bank stock — and emails the editor a summary
+   with recommendations.

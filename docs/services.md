@@ -64,9 +64,33 @@ convention.
   actually expires.
 - **Third-party dependencies:** Meta Graph API (Threads), SendGrid.
 
+## `weeklyAnalyticsEmail` (scheduled Cloud Function)
+- **File:** `functions/src/index.ts` (logic in `functions/src/weeklyAnalyticsJob.ts`)
+- **Trigger:** Cloud Scheduler, `0 7 * * 1` (weekly, Monday) Europe/Helsinki.
+- **Inputs:** none (reads `drafts` and `contentBank` Firestore collections).
+- **Outputs:** emails the editor a weekly analytics summary; returns
+  `WeeklyAnalyticsStats` (not persisted to Firestore — recomputed fresh
+  each run from `drafts`, so it's always consistent with the live data,
+  at the cost of re-scanning up to a week's drafts every Monday).
+- **Side effects:** SendGrid email send. Read-only against Firestore
+  (no writes).
+- **Third-party dependencies:** SendGrid only. Deliberately does **not**
+  call Cloud Logging/Monitoring — the runtime service account only has
+  Firestore/Secret Manager/Parameter Manager access (granted for the daily
+  pipeline), and pulling AI-call-level error logs would need
+  `roles/logging.viewer` granted separately; out of scope for v1.
+- **Analysis performed:** per-pillar published share vs.
+  `PILLAR_TARGET_SHARE` (flags pillars >10 percentage points under target);
+  per-platform posted/failed/AI-shortened counts; template (A/B/C/D) usage;
+  content bank remaining stock per pillar (flags ≤5 remaining); rejected
+  draft count. See `packages/shared/src/weeklyAnalytics.ts` for the
+  threshold constants.
+
 ## `email` (`functions/src/email.ts`, not a standalone deployable service
-but called by `dailyContentPipeline` and `refreshThreadsToken`)
-- **Inputs:** `sendMagicLinkEmail(draft)`, `sendThreadsRefreshNotification(status, details)`.
+but called by `dailyContentPipeline`, `refreshThreadsToken`, and
+`weeklyAnalyticsEmail`)
+- **Inputs:** `sendMagicLinkEmail(draft)`, `sendThreadsRefreshNotification(status, details)`,
+  `sendWeeklyAnalyticsEmail(stats)`.
 - **Side effects:** sends HTML email via the SendGrid HTTP API directly (no
   Firebase Trigger Email extension, per project decision).
 - Every email is wrapped in a shared branded HTML shell (`wrapEmailHtml`):

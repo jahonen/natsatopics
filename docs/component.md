@@ -94,6 +94,18 @@ re-export shim at that path for backwards compatibility)
 - Platform character-limit checks (`checkPlatformLength`), grapheme-aware
   for Bluesky. Safe for both client and server use.
 
+### `weeklyAnalytics` — `packages/shared/src/weeklyAnalytics.ts`
+- **Lifecycle tag:** alpha
+- **Inputs:** `computeWeeklyStats(isoWeek, rangeStart, rangeEnd, drafts, contentBankRemaining)`
+  — pure function, no Firestore access (the query lives in
+  `functions/src/weeklyAnalyticsJob.ts` so this stays unit-testable without
+  an emulator).
+- **Outputs:** `WeeklyAnalyticsStats` (`packages/shared/src/types.ts`) —
+  per-pillar counts/shares/deltas vs. `PILLAR_TARGET_SHARE`, per-platform
+  posted/failed/AI-adapted counts, template usage, content bank remaining
+  stock, and a Finnish-language `recommendations` list.
+- **Side effects:** none.
+
 ## Functions (`functions/`, Firebase Cloud Functions v2)
 
 ### `dailyContentPipeline` — `functions/src/index.ts`, logic in `functions/src/dailyJob.ts`
@@ -133,7 +145,8 @@ re-export shim at that path for backwards compatibility)
 ### `email` — `functions/src/email.ts`
 - **Lifecycle tag:** alpha
 - **Inputs:** `sendMagicLinkEmail(draft)` (a `DraftDocument`);
-  `sendThreadsRefreshNotification(status, details)`.
+  `sendThreadsRefreshNotification(status, details)`;
+  `sendWeeklyAnalyticsEmail(stats)` (a `WeeklyAnalyticsStats`).
 - **Outputs:** none (fire-and-forget send).
 - **Side effects:** sends HTML email via the SendGrid HTTP API directly (no
   Firebase Trigger Email extension, per project decision).
@@ -158,6 +171,17 @@ re-export shim at that path for backwards compatibility)
 - Scheduled trigger (weekly, Monday 03:00 Europe/Helsinki). Calls
   `refreshThreadsAccessToken` (`functions/src/publish/threadsTokenRefresh.ts`)
   to rotate the 60-day Threads long-lived user token before it expires.
+
+### `weeklyAnalyticsEmail` — `functions/src/index.ts`, logic in `functions/src/weeklyAnalyticsJob.ts`
+- **Lifecycle tag:** alpha
+- Scheduled trigger (weekly, Monday 07:00 Europe/Helsinki, after the 03:00
+  Threads token refresh and before that day's 06:00 daily draft). Queries
+  `drafts` for the ISO week that just ended (Monday-Sunday) by `date` range,
+  counts remaining unused `contentBank` items per pillar, calls
+  `computeWeeklyStats`, and emails the result via `sendWeeklyAnalyticsEmail`
+  (`email.ts`). Firestore-only by design — no Cloud Logging/Monitoring API
+  calls, since those would need IAM roles beyond what the runtime service
+  account already has for the daily pipeline.
 
 ### `params` — `functions/src/params.ts`
 - **Lifecycle tag:** stable
