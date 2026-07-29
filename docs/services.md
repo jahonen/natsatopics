@@ -8,12 +8,24 @@ convention.
 - **Trigger:** Cloud Scheduler, `0 6 * * *` Europe/Helsinki.
 - **Inputs:** none (reads YLE RSS feeds and Firestore state).
 - **Outputs:** creates one `drafts/{draftId}` Firestore document and emails
-  the editor a magic link.
+  the editor a magic link (with a news excerpt and per-option deep links,
+  see `email.ts` below).
 - **Side effects:** Firestore writes (`drafts`, `weeklyPillarCounts`,
-  `contentBank`), SendGrid email send, Vertex AI (Gemini) calls, YLE RSS
+  `contentBank`), SendGrid email send, Vertex AI (Mistral) calls, YLE RSS
   HTTP fetches.
-- **Third-party dependencies:** SendGrid (email), Vertex AI/Gemini (drafting
-  + classification), YLE RSS feeds (news source, no auth key).
+- **Third-party dependencies:** SendGrid (email), Vertex AI Model Garden /
+  Mistral (drafting + classification), YLE RSS feeds (news source, no auth
+  key).
+- **AI model quota note:** `classifyNewsItem` runs once per red-flag-passed
+  news candidate (up to ~44/day) until one is accepted, and each call sends
+  the full ~18KB content guide. This alone can exceed
+  `mistral-medium-3`'s **31,500 tokens/min** Vertex AI quota in
+  `europe-west4`/`us-central1` within a single run, so classification uses
+  `mistral-small-2503` (200,000 tokens/min quota) instead — see
+  `AiModelConfig` override in `dailyJob.ts`. Draft/copy generation (1-2
+  calls/run, where Finnish grammatical quality matters most) stays on
+  `mistral-medium-3`. If you see `Quota exceeded` errors, request a quota
+  increase via the Vertex AI console rather than reverting this.
 
 ## `editorApi` (HTTPS Cloud Function)
 - **File:** `functions/src/index.ts`
@@ -52,6 +64,27 @@ convention.
   actually expires.
 - **Third-party dependencies:** Meta Graph API (Threads), SendGrid.
 
+## `email` (`functions/src/email.ts`, not a standalone deployable service
+but called by `dailyContentPipeline` and `refreshThreadsToken`)
+- **Inputs:** `sendMagicLinkEmail(draft)`, `sendThreadsRefreshNotification(status, details)`.
+- **Side effects:** sends HTML email via the SendGrid HTTP API directly (no
+  Firebase Trigger Email extension, per project decision).
+- Every email is wrapped in a shared branded HTML shell (`wrapEmailHtml`):
+  Natsastore logo (`{WEB_APP_BASE_URL}/android-chrome-192x192.png`, i.e. the
+  App Hosting site's own `/public` folder — see `web/public/` in
+  `component.md`) and brand-orange accents.
+- The daily draft-review email additionally shows the source news item's
+  title/link/summary (when the pillar is news-driven), and makes each of
+  the 3 draft options its own clickable magic link into the editor with
+  that option pre-selected (`?optionId=...`), alongside the generic
+  "open editor" link.
+- **Sender avatar (Gravatar/BIMI):** not automatable from this codebase.
+  Gravatar requires manually registering `SENDGRID_FROM_EMAIL` at
+  gravatar.com with the logo uploaded; BIMI (what gets Gmail to show a
+  sender logo) requires a DNS TXT record at the sending domain plus DMARC
+  enforcement, and for guaranteed Gmail support a paid Verified Mark
+  Certificate. Track in `integration.md` if pursued.
+
 ## Publishing pipelines (`functions/src/publish/*.ts`)
 - **Facebook:** Graph API `POST /{page-id}/feed`. Secrets:
   `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_ACCESS_TOKEN`.
@@ -64,13 +97,18 @@ convention.
   `BLUESKY_IDENTIFIER`, `BLUESKY_APP_PASSWORD`.
 - Each pipeline first checks the platform's character limit
   (`packages/shared/social/formatters.ts`); if the message doesn't fit, it
-  calls Gemini (`adaptForPlatform`) to shorten it before posting.
+  calls Mistral (`adaptForPlatform`) to shorten it before posting.
 
 ## Parameter Manager inventory (see `functions/src/params.ts`)
 | Parameter name | Used by | Notes |
 |---|---|---|
 | `EDITOR_EMAIL` | `email.ts` | Recipient of the daily review email and refresh notifications. Not a credential, so it lives in Parameter Manager rather than Secret Manager. |
 | `SENDGRID_FROM_EMAIL` | `email.ts` | Verified sender identity in SendGrid (`natsastore@nxtstride.com`). Not a credential either. |
+| `AI_MODEL_NAME` / `AI_MODEL_LOCATION` | `dailyJob.ts` (drafting only — `classifyNewsItem` overrides to `mistral-small-2503`, see quota note above) | Vertex AI Model Garden model + region, e.g. `mistral-medium-3` / `europe-west4`. Kept in Parameter Manager rather than hardcoded so the model can be swapped without a code deploy if a provider retires a model. |
+
+Parameter Manager's `getParameterVersion` does **not** support the
+`latest` version alias (unlike Secret Manager's `accessSecretVersion`,
+which does) — it 404s. `params.ts` uses `renderParameterVersion` instead.
 
 ## Secret Manager inventory (see `functions/src/secrets.ts`)
 | Secret name | Used by | Notes |
@@ -91,9 +129,16 @@ Manager (`global` location); the functions' service account needs
 
 ## Integration tracking (external services)
 - **SendGrid** — email delivery. Approval + account owned by user.
-- **Vertex AI (Gemini)** — drafting, classification, platform adaptation.
-  Native GCP, billed to `natsatopics`.
+- **Vertex AI Model Garden (Mistral)** — drafting (`mistral-medium-3`),
+  classification (`mistral-small-2503`), platform adaptation
+  (`mistral-medium-3`). Third-party partner models require a one-time
+  manual "Enable" click (accepting the EULA) per model in the Model Garden
+  console — not automatable via `gcloud`/API, since it needs a Cloud
+  Commerce Consumer Procurement entitlement. Billed to `natsatopics`.
 - **Meta Graph API (Facebook + Threads)** — requires an approved Meta app
   with `pages_manage_posts` / Threads publishing permissions.
 - **Bluesky AT Protocol** — no app review process; app password only.
 - **YLE RSS feeds** — public, unauthenticated, no SLA guarantee.
+- **Gravatar / BIMI** (sender avatar in email clients) — not yet set up;
+  requires manual account/DNS work outside this codebase, see the `email`
+  section above.

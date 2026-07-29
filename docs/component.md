@@ -4,9 +4,18 @@ Every modular unit of functionality in this project, per project convention.
 
 ## Web app (`web/`, Firebase App Hosting, Next.js)
 
+App icons/favicons and `site.webmanifest` live in `web/public/` (copied
+from `assets/`, wired up in `web/src/app/layout.tsx`'s `metadata.icons` /
+`metadata.manifest`); also reused as the logo in outgoing emails (see
+`wrapEmailHtml` below) since `web/public/` is served at the App Hosting
+site's own base URL.
+
 ### `EditorPage` — `web/src/components/EditorPage/EditorPage.tsx`
 - **Lifecycle tag:** alpha
-- **Inputs:** `draftId` (route param), `token` (magic-link query param).
+- **Inputs:** `draftId` (route param), `token` (magic-link query param),
+  `initialOptionId` (optional query param — pre-selects that option instead
+  of always defaulting to the first one, so each option's own link in the
+  daily email can land directly on that option).
 - **Outputs:** renders the draft's 3 AI-generated options, a Tiptap editor
   for the final cross-platform message, per-platform character counters,
   and Save/Publish actions.
@@ -24,7 +33,8 @@ Every modular unit of functionality in this project, per project convention.
 
 ### `DraftEditorRoute` — `web/src/app/editor/[draftId]/page.tsx`
 - **Lifecycle tag:** alpha
-- **Inputs:** Next.js dynamic route param `draftId`, search param `token`.
+- **Inputs:** Next.js dynamic route param `draftId`, search params `token`
+  and optional `optionId`.
 - **Outputs:** renders `EditorPage`, or an error message if `token` is
   missing.
 - **Side effects:** none.
@@ -33,7 +43,7 @@ Every modular unit of functionality in this project, per project convention.
 
 ### `contentGuide` — `packages/shared/src/contentGuide.ts`
 - Loads `assets/natsastore-sisaltoopas.md` (copied into the compiled
-  package at build time) so it can be injected into every Gemini prompt.
+  package at build time) so it can be injected into every AI prompt.
 
 ### `pillarTracker` — `packages/shared/src/pillarTracker.ts`
 - Tracks weekly per-pillar publish counts in Firestore
@@ -48,11 +58,37 @@ Every modular unit of functionality in this project, per project convention.
 - Picks/recycles nostalgia and history prompts (luku 6) from Firestore's
   `contentBank` collection, since those pillars don't come from news.
 
-### `gemini` — `packages/shared/src/gemini.ts`
-- Server-only (Node `fs`/`@google-cloud/vertexai`). Never import from
-  client components — use deep imports of `types` or `social/formatters`
-  instead (see `web/src/components/EditorPage/EditorPage.tsx` for the
-  pattern) to avoid bundling this into the browser build.
+### `ai` — `packages/shared/src/ai.ts` (formerly `gemini.ts`, kept as a
+re-export shim at that path for backwards compatibility)
+- **Lifecycle tag:** alpha
+- Server-only. Calls Mistral models on Vertex AI Model Garden directly via
+  `rawPredict` HTTP calls (no `@google-cloud/vertexai` SDK — that only
+  supports Google's own Gemini models, not partner models). Never import
+  from client components — use deep imports of `types` or
+  `social/formatters` instead (see
+  `web/src/components/EditorPage/EditorPage.tsx` for the pattern) to avoid
+  bundling this into the browser build.
+- **Exports:**
+  - `classifyNewsItem(projectId, news, config?)` — relevance/red-flag/pillar
+    classification for one candidate news item.
+  - `generateDrafts(projectId, news, pillar, config?)` /
+    `generateBankDrafts(projectId, bankPrompt, pillar, config?)` — 3 draft
+    options for a news-driven or content-bank-driven pillar.
+  - `adaptForPlatform(projectId, finalText, platform, config?)` — shortens
+    a finalised message to fit a platform's character limit.
+  - `AiModelConfig` (`{ model, location }`, optional on every call above,
+    defaults to `mistral-medium-3` / `europe-west4`) — lets callers override
+    the model per call; `functions/src/dailyJob.ts` uses this to run
+    `classifyNewsItem` on the cheaper/higher-quota `mistral-small-2503`
+    while drafting stays on `mistral-medium-3` (see services.md quota
+    note).
+- **`FINNISH_QUALITY_INSTRUCTIONS`** (internal constant): explicit
+  grammar-quality block injected into every copy-generating prompt
+  (`generateDrafts`, `generateBankDrafts`, `adaptForPlatform`, not
+  `classifyNewsItem` since that only produces internal reasoning text, not
+  published copy) — requires complete subject+predicate sentences, correct
+  case endings, compound words written as one word (a common LLM mistake in
+  Finnish), correct comma usage, and a self-review pass before returning.
 
 ### `social/formatters` — `packages/shared/src/social/formatters.ts`
 - Platform character-limit checks (`checkPlatformLength`), grapheme-aware
@@ -60,9 +96,21 @@ Every modular unit of functionality in this project, per project convention.
 
 ## Functions (`functions/`, Firebase Cloud Functions v2)
 
-### `dailyContentPipeline` — `functions/src/index.ts`
+### `dailyContentPipeline` — `functions/src/index.ts`, logic in `functions/src/dailyJob.ts`
 - **Lifecycle tag:** alpha
-- Scheduled trigger (06:00 Europe/Helsinki daily). Calls `runDailyPipeline`.
+- Scheduled trigger (06:00 Europe/Helsinki daily). Calls `runDailyPipeline`,
+  which: picks the week's most under-represented pillar
+  (`pickUnderrepresentedPillar`); for nostalgia/history pulls a prompt from
+  the content bank (`generateBankDrafts`); otherwise scrapes YLE
+  (`fetchYleNews`), red-flag pre-filters (`quickRedFlagCheck`), and loops
+  candidates through `classifyNewsItem` until one is accepted
+  (`generateDrafts`); then writes a `drafts/{id}` Firestore doc and emails
+  the editor (`sendMagicLinkEmail`).
+- `classifyNewsItem`'s per-candidate loop uses `mistral-small-2503`
+  specifically (not the configured default `mistral-medium-3`) — with up to
+  ~44 candidates/day and the full content guide sent on every call, that
+  loop alone could exceed `mistral-medium-3`'s 31,500 tokens/min Vertex AI
+  quota. See `docs/services.md` for the full quota note.
 
 ### `fetchYleNews` — `functions/src/yleScraper.ts`
 - **Lifecycle tag:** alpha
@@ -82,6 +130,24 @@ Every modular unit of functionality in this project, per project convention.
 - HTTPS function exposing `get-draft`, `save-draft`, `publish` routes to
   the web app. Validates the magic-link token on every request.
 
+### `email` — `functions/src/email.ts`
+- **Lifecycle tag:** alpha
+- **Inputs:** `sendMagicLinkEmail(draft)` (a `DraftDocument`);
+  `sendThreadsRefreshNotification(status, details)`.
+- **Outputs:** none (fire-and-forget send).
+- **Side effects:** sends HTML email via the SendGrid HTTP API directly (no
+  Firebase Trigger Email extension, per project decision).
+- **`wrapEmailHtml(baseUrl, bodyHtml)`** (internal): shared branded shell
+  used by every outgoing email — logo (`android-chrome-192x192.png`, served
+  from the deployed web app's own `/public` folder via `WEB_APP_BASE_URL`)
+  and brand-orange (`#f7941d`) accents.
+- `sendMagicLinkEmail` shows the source news item's title, link, and
+  summary (when the pillar came from news rather than the content bank),
+  and renders each of the 3 draft options as its own clickable link straight
+  into the editor with that option pre-selected
+  (`{baseLink}&optionId={option.id}`), in addition to the generic
+  "open editor" link.
+
 ### Publishing pipelines — `functions/src/publish/{facebook,threads,bluesky}.ts`
 - **Lifecycle tag:** alpha
 - One module per platform, each reading its own credentials from Secret
@@ -92,6 +158,16 @@ Every modular unit of functionality in this project, per project convention.
 - Scheduled trigger (weekly, Monday 03:00 Europe/Helsinki). Calls
   `refreshThreadsAccessToken` (`functions/src/publish/threadsTokenRefresh.ts`)
   to rotate the 60-day Threads long-lived user token before it expires.
+
+### `params` — `functions/src/params.ts`
+- **Lifecycle tag:** stable
+- **Inputs:** `getParameter(name)`, `getAiModelConfig()`.
+- **Outputs:** cached string value / `{ model, location }`.
+- **Side effects:** reads Google Cloud Parameter Manager
+  (`global` location) via `renderParameterVersion` — **not**
+  `getParameterVersion`, which 404s on the `latest` alias for Parameter
+  Manager (unlike Secret Manager, where `latest` does work). Results are
+  cached per warm instance for 5 minutes.
 
 ### `testBlueskyHello` — `functions/src/index.ts`
 - **Lifecycle tag:** alpha
