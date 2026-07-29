@@ -81,10 +81,18 @@ export async function runDailyPipeline(projectId: string): Promise<{ draftId: st
     }
 
     // Käydään ehdokkaita läpi, kunnes tekoäly hyväksyy yhden relevanttina ja
-    // ei-punalipullisena, ja antaa sille uutisvetoisen pilarin.
+    // ei-punalipullisena, ja antaa sille uutisvetoisen pilarin. Tämä voi
+    // kutsua mallia kymmeniä kertoja per ajo (yksi per ehdokas, ennen kuin
+    // yksi hyväksytään), ja joka kutsu sisältää koko ~18 kt:n sisältöoppaan
+    // — siksi luokittelussa käytetään erikseen kevyempää mallia kuin
+    // varsinaisessa tekstintuotannossa (jonka kielellinen laatu on
+    // tärkeämpi ja jota kutsutaan vain 1-2 kertaa per ajo), jotta Vertex AI:n
+    // per-minuutti-token-kvootti mistral-medium-3:lle (31 500) ei ylity
+    // pelkästä luokittelusilmukasta.
+    const classificationModelConfig = { model: 'mistral-small-2503', location: aiModelConfig.location };
     let chosenPillar: Pillar | null = null;
     for (const item of candidates) {
-      const classification = await classifyNewsItem(projectId, item, aiModelConfig);
+      const classification = await classifyNewsItem(projectId, item, classificationModelConfig);
       if (classification.redFlagged || !classification.relevant || !classification.pillar) continue;
       chosenNews = item;
       chosenPillar = classification.pillar;

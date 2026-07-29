@@ -36,6 +36,29 @@ async function sendViaSendGrid(params: {
 }
 
 /**
+ * Wraps an email's body HTML in a minimal branded shell: logo (served from
+ * the deployed web app's /public folder, see web/public/), Natsastore's
+ * brand orange as an accent, and a consistent footer. Kept intentionally
+ * simple (table-free, no custom fonts) since this only needs to render
+ * correctly in the editor's own inbox, not survive every email client's
+ * CSS support like a marketing template would.
+ */
+function wrapEmailHtml(baseUrl: string, bodyHtml: string): string {
+  const logoUrl = `${baseUrl.replace(/\/$/, '')}/android-chrome-192x192.png`;
+  return `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1a1a1a; max-width: 640px;">
+      <div style="display: flex; align-items: center; gap: 12px; border-bottom: 3px solid #f7941d; padding-bottom: 12px; margin-bottom: 20px;">
+        <img src="${logoUrl}" alt="Natsastore" width="48" height="48" style="border-radius: 50%; display: block;">
+        <span style="font-size: 20px; font-weight: 700; color: #f7941d;">Natsastore</span>
+      </div>
+      ${bodyHtml}
+      <div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #e5e5e5; font-size: 12px; color: #888;">
+        Natsastore-sisältöpipeline — automaattinen viesti.
+      </div>
+    </div>`;
+}
+
+/**
  * Sends the daily "drafts ready for review" email directly via the SendGrid
  * HTTP API (no Firebase Trigger Email extension), per project decision.
  */
@@ -75,13 +98,16 @@ export async function sendMagicLinkEmail(draft: DraftDocument): Promise<void> {
     from: fromEmail,
     fromName: 'Natsastore sisältöpipeline',
     subject: `Natsastore: ${draft.date} päivän postausluonnokset odottavat tarkistusta`,
-    html: `
+    html: wrapEmailHtml(
+      baseUrl,
+      `
       <p>Päivän uutispohjainen aihe (pilari: ${draft.pillar}):</p>
       ${sourceNewsHtml}
       ${optionsPreview}
-      <p><a href="${baseLink}">Avaa muokkaustyökalu ja julkaise →</a></p>
+      <p><a href="${baseLink}" style="color: #f7941d; font-weight: 600;">Avaa muokkaustyökalu ja julkaise →</a></p>
       <p>Linkki vanhenee 48 tunnin kuluttua.</p>
-    `,
+    `
+    ),
   });
 }
 
@@ -95,9 +121,10 @@ export async function sendThreadsRefreshNotification(
   status: 'SUCCESS' | 'FAIL',
   details: string
 ): Promise<void> {
-  const [fromEmail, editorEmail] = await Promise.all([
+  const [fromEmail, editorEmail, baseUrl] = await Promise.all([
     getParameter(PARAMETER_NAMES.SENDGRID_FROM_EMAIL),
     getParameter(PARAMETER_NAMES.EDITOR_EMAIL),
+    getSecret(SECRET_NAMES.WEB_APP_BASE_URL),
   ]);
 
   await sendViaSendGrid({
@@ -105,7 +132,7 @@ export async function sendThreadsRefreshNotification(
     from: fromEmail,
     fromName: 'Natsastore sisältöpipeline',
     subject: `Natsastore Threads token refresh [${status}]`,
-    html: `<p>${escapeHtml(details)}</p>`,
+    html: wrapEmailHtml(baseUrl, `<p>${escapeHtml(details)}</p>`),
   });
 }
 
