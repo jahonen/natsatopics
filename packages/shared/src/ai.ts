@@ -54,7 +54,7 @@ async function generateJson<T>(projectId: string, prompt: string, config?: AiMod
         model,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 4096,
-        temperature: 0.7,
+        temperature: 0.6,
         response_format: { type: 'json_object' },
         stream: false,
       }),
@@ -70,6 +70,27 @@ async function generateJson<T>(projectId: string, prompt: string, config?: AiMod
   if (!text) throw new Error(`Vertex AI (${model}) returned no content`);
   return JSON.parse(text) as T;
 }
+
+/**
+ * Explicit Finnish-language quality bar for every prompt that produces text
+ * which gets published as-is. LLMs left to their own devices tend to
+ * produce grammatically "off" Finnish that a native reader immediately
+ * spots — split compound words, wrong case endings, missing/extra commas,
+ * and stiff, translated-sounding phrasing. This is injected into every
+ * copy-generating prompt so the output should pass the scrutiny of a
+ * Finnish lukio (upper-secondary) mother-tongue teacher, not just be
+ * "understandable".
+ */
+const FINNISH_QUALITY_INSTRUCTIONS = `KIELELLINEN LAATUVAATIMUS (tärkeä):
+Tekstin pitää olla sellaista suomea, että äidinkielen ja kirjallisuuden lukio-opettaja hyväksyisi sen sellaisenaan — ei tekoälymäistä, kankeaa tai suomennokselta kuulostavaa kieltä. Varmista erityisesti:
+- JOKAINEN virke on kieliopillisesti täydellinen: siinä on selvä subjekti ja finiittiverbi (predikaatti). Älä käytä irrallisia lausekkeita tai nominaalirakenteita virkkeen asemesta (esim. "Toimenpide vastineena jännitteisiin." EI kelpaa — kirjoita täydellinen virke, kuten "Toimenpide on vastaus jännitteisiin.").
+- Sijamuodot ja taipumukset ovat kieliopillisesti täsmälleen oikein, myös hankalissa rakenteissa. Esimerkiksi "on"-verbin jälkeen ajanilmauksessa käytetään nominatiivia, ei partitiivia: "Nyt on hyvä aika…", EI "Nyt on hyvää aikaa…". Tarkista jokainen sijamuoto erikseen, äläkä luota ensimmäiseen mieleen tulevaan muotoon.
+- Yhdyssanat kirjoitetaan YHTEEN, kuten suomen kielioppi vaatii (esim. "kertausharjoitus", ei "kertaus harjoitus"; "maanpuolustustahto", ei "maanpuolustus tahto").
+- Pilkut ja välimerkit noudattavat suomen kielen sääntöjä (esim. pilkku ennen "mutta", "vaan", sivulauseen edellä kun se ei ole "että"-lause objektina).
+- Lauserakenne on luonnollista, sujuvaa yleiskieltä — ei suoraan englannista käännetyn kuuloista rakennetta (esim. vältä passiivin liikakäyttöä ja kankeita substantiivirakenteita, jos aktiivi ja verbi kuulostaisivat luonnollisemmalta).
+- Ei toistoa: samaa sanaa tai rakennetta ei käytetä turhaan peräkkäisissä virkkeissä.
+- Isot ja pienet alkukirjaimet oikein (erisnimet, virkkeen alku).
+Kirjoita teksti ensin mielessäsi, lue se sitten kokonaan uudelleen läpi virke virkkeeltä ikään kuin tarkistaisit oppilaan aineen kielioppia, korjaa jokainen löytämäsi kielioppi-, sijamuoto-, oikeinkirjoitus- ja välimerkkivirhe, ja palauta vasta tämän jälkeen lopullinen, korjattu versio.`;
 
 export interface RelevanceClassification {
   relevant: boolean;
@@ -134,6 +155,8 @@ export async function generateDrafts(
 
 Palauta TARKALLEEN JSON: {"options": [{"id": string, "text": string, "template": "A"|"B"|"C"|"D"}, ...]} — tasan 3 alkiota.
 
+${FINNISH_QUALITY_INSTRUCTIONS}
+
 SISÄLTÖOPAS:
 """
 ${guide}
@@ -165,6 +188,8 @@ export async function generateBankDrafts(
 
 Palauta TARKALLEEN JSON: {"options": [{"id": string, "text": string, "template": "A"|"B"|"C"|"D"}, ...]} — tasan 3 alkiota.
 
+${FINNISH_QUALITY_INSTRUCTIONS}
+
 SISÄLTÖOPAS:
 """
 ${guide}
@@ -191,6 +216,8 @@ export async function adaptForPlatform(
   const limit = PLATFORM_CHAR_LIMITS[platform];
   const guide = loadContentGuide();
   const prompt = `Muokkaa seuraava Natsastore-some-postaus mahtumaan alustan "${platform}" merkkirajaan (${limit} merkkiä), säilyttäen sisältö, sävy (luku 7) ja sanasto (luku 5) sisältöoppaan mukaisina. Älä lisää tuotelinkkiä. Palauta TARKALLEEN JSON: {"text": string}.
+
+${FINNISH_QUALITY_INSTRUCTIONS}
 
 SISÄLTÖOPAS (tiivistetty relevantit luvut):
 """
