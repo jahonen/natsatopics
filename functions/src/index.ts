@@ -9,6 +9,7 @@ import { publishToFacebook } from './publish/facebook';
 import { publishToThreads } from './publish/threads';
 import { refreshThreadsAccessToken } from './publish/threadsTokenRefresh';
 import { sendThreadsRefreshNotification } from './email';
+import { runWeeklyAnalytics } from './weeklyAnalyticsJob';
 import { DraftDocument } from '@natsatopics/shared';
 
 initializeApp();
@@ -41,6 +42,22 @@ export const dailyContentPipeline = onSchedule(
     } else {
       console.log(`Daily pipeline created draft ${result.draftId}`);
     }
+  }
+);
+
+/**
+ * Analyses the ISO week that just ended (Monday-Sunday, Europe/Helsinki)
+ * against the guide's pillar target shares and content-bank health, and
+ * emails the editor a summary + recommendations. Runs Monday morning,
+ * after the token refresh (03:00) and before that day's own draft (06:00).
+ */
+export const weeklyAnalyticsEmail = onSchedule(
+  { schedule: '0 7 * * 1', timeZone: 'Europe/Helsinki', region: REGION, timeoutSeconds: 120 },
+  async () => {
+    const stats = await runWeeklyAnalytics();
+    console.log(
+      `Weekly analytics email sent for ${stats.isoWeek}: ${stats.publishedCount} published, ${stats.recommendations.length} recommendation(s)`
+    );
   }
 );
 

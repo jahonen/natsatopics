@@ -78,3 +78,20 @@ export interface ContentBankItem {
   used: boolean;
   lastUsedDate?: string;
 }
+
+export interface WeeklyAnalyticsStats {
+  isoWeek: string;
+  rangeStart: string; // YYYY-MM-DD
+  rangeEnd: string; // YYYY-MM-DD
+  totalDrafts: number;
+  publishedCount: number;
+  rejectedCount: number;
+  pendingCount: number;
+  pillarCounts: Record<Pillar, number>;
+  pillarShares: Record<Pillar, number>;
+  pillarDeltas: Record<Pillar, number>; // actual share - target share; negative = under-represented
+  templateCounts: Partial<Record<PostTemplate, number>>;
+  platformStats: Record<SocialPlatform, { posted: number; failed: number; adapted: number }>;
+  contentBankRemaining: Record<'nostalgia' | 'history', number>;
+  recommendations: string[];
+}
