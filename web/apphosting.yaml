@@ -2,7 +2,9 @@
 # Deploy from the web/ directory: `firebase apphosting:backends:create` then
 # connect this repo, or use `firebase deploy` once a backend is linked.
 runConfig:
-  minInstances: 0
+  # Kept warm to avoid multi-second cold-start delays when the editor clicks
+  # the daily review email link (see RCA in docs/services.md).
+  minInstances: 1
   maxInstances: 2
   cpu: 1
   memoryMiB: 512

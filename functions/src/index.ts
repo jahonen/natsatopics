@@ -66,7 +66,10 @@ export const weeklyAnalyticsEmail = onSchedule(
  * validate the magic-link token server-side on every request; the token
  * itself is never trusted client-side beyond display.
  */
-export const editorApi = onRequest({ region: REGION, cors: true }, async (req, res) => {
+// minInstances: 1 keeps a warm instance so the editor's first click on the
+// daily review email link doesn't hit a multi-second cold start on top of
+// the App Hosting frontend's own cold start (see RCA in docs/services.md).
+export const editorApi = onRequest({ region: REGION, cors: true, minInstances: 1 }, async (req, res) => {
   setCors(res);
   if (req.method === 'OPTIONS') {
     res.status(204).send('');
